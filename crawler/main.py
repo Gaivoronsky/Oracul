@@ -216,7 +216,9 @@ class CrawlerApp:
                 from storage.database.repository import ArticleRepository
                 
                 connection_string = storage_config.get("connection_string", "sqlite:///news.db")
-                self.storage_client = ArticleRepository(connection_string)
+                if connection_string != os.getenv("DATABASE_URL"):
+                    os.environ["DATABASE_URL"] = connection_string
+                self.storage_client = ArticleRepository()
                 logger.info(f"Initialized database storage client with connection string: {connection_string}")
             
             elif storage_type == "elasticsearch":
