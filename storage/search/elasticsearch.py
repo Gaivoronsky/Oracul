@@ -27,6 +27,69 @@ ES_INDEX_NAME = os.getenv("ELASTICSEARCH_INDEX_NAME", "news_articles")
 ES_TIMEOUT = int(os.getenv("ELASTICSEARCH_TIMEOUT", "30"))
 
 
+class ElasticsearchClient:
+    """Simple wrapper class used by the crawler and processor."""
+
+    def __init__(self, hosts: Optional[List[str]] = None, index_name: Optional[str] = None):
+        self.hosts = hosts or [ES_URL]
+        self.index_name = index_name or ES_INDEX_NAME
+        try:
+            self.es = Elasticsearch(
+                self.hosts,
+                basic_auth=(ES_USERNAME, ES_PASSWORD),
+                timeout=ES_TIMEOUT,
+            )
+            # Test connection
+            if not self.es.ping():
+                logger.warning("Could not connect to Elasticsearch")
+        except ConnectionError as e:
+            logger.error(f"Failed to connect to Elasticsearch: {e}")
+            self.es = None
+
+    async def close(self) -> None:
+        """Close the underlying transport."""
+        try:
+            if self.es:
+                self.es.transport.close()
+        except Exception as e:
+            logger.error(f"Error closing Elasticsearch client: {e}")
+
+    async def index_article(self, article_data: Dict[str, Any]) -> bool:
+        """Index a single article."""
+        if not self.es:
+            logger.error("Elasticsearch client not available")
+            return False
+        try:
+            doc_id = article_data.get("id")
+            if not doc_id:
+                logger.error("Article ID is required for indexing")
+                return False
+            self.es.index(index=self.index_name, id=doc_id, document=article_data)
+            logger.info(f"Indexed article with ID {doc_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to index article: {e}")
+            return False
+
+    async def create_article(self, article_data: Dict[str, Any]) -> bool:
+        """Alias used by the crawler."""
+        return await self.index_article(article_data)
+
+    async def create_crawl_log(self, log_entry: Dict[str, Any]) -> bool:
+        """Store crawl log entries in a dedicated index."""
+        if not self.es:
+            logger.error("Elasticsearch client not available")
+            return False
+        try:
+            log_index = f"{self.index_name}_crawl_logs"
+            log_id = log_entry.get("timestamp") or datetime.utcnow().isoformat()
+            self.es.index(index=log_index, id=log_id, document=log_entry)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to index crawl log: {e}")
+            return False
+
+
 def get_elasticsearch_client() -> Elasticsearch:
     """
     Create and return an Elasticsearch client.

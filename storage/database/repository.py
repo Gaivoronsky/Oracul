@@ -70,7 +70,7 @@ class BaseRepository(Generic[T]):
         self.model = model
         self.session = get_session()
 
-    def close(self):
+    async def close(self):
         """Close the session."""
         self.session.close()
 
@@ -418,7 +418,7 @@ class AnalyticsRepository:
     def __init__(self):
         self.session = get_session()
 
-    def close(self):
+    async def close(self):
         """Close the session."""
         self.session.close()
 
